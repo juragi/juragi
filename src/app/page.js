@@ -1,25 +1,44 @@
-"use client"; // 이 파일은 브라우저에서 동작함을 명시
+"use client"; // 클라이언트 컴포넌트임을 선언
 
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import { createClient } from '@supabase/supabase-js';
 
-// 1. Supabase 클라이언트 설정 (보통은 별도 파일로 분리하지만 테스트를 위해 상단에 배치)
+// 1. Supabase 클라이언트 설정
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// 2. 서버 컴포넌트를 async 함수로 변경
-export default async function Home() {
-  
-  // 3. 데이터 가져오기 (C#의 await _context.Test.ToListAsync()와 유사)
-  const { data: testItems, error } = await supabase
-    .from("test")
-    .select("*")
-    .order("created_at", { ascending: false }); // 최신순 정렬
+export default function Home() {
+  // 상태 관리 (C#의 필드/프로퍼티 역할)
+  const [testItems, setTestItems] = useState([]);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // 2. 데이터 가져오기 함수 (async/await)
+  const fetchItems = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("test")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      setError(error.message);
+    } else {
+      setTestItems(data);
+    }
+    setLoading(false);
+  };
+
+  // 3. 페이지 로드 시 최초 1회 실행 (무한 루프 방지)
+  useEffect(() => {
+    fetchItems();
+  }, []); // 의존성 배열을 비워두어 단 한 번만 실행되게 합니다.
 
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-24 px-16 bg-white dark:bg-black sm:items-start">
+    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black min-h-screen">
+      <main className="flex flex-1 w-full max-w-3xl flex-col items-center py-24 px-16 bg-white dark:bg-black sm:items-start">
         <Image
           className="dark:invert mb-8"
           src="/next.svg"
@@ -34,10 +53,11 @@ export default async function Home() {
             Supabase 데이터베이스 연동 확인
           </h1>
 
-          {/* 4. 에러 처리 및 데이터 렌더링 */}
-          {error ? (
-            <div className="p-4 bg-red-50 text-red-600 rounded-md border border-red-200">
-              데이터를 불러오지 못했습니다: {error.message}
+          {loading ? (
+            <p className="text-zinc-500 italic">데이터를 불러오는 중입니다...</p>
+          ) : error ? (
+            <div className="p-4 bg-red-50 text-red-600 rounded-md border border-red-200 w-full">
+              데이터를 불러오지 못했습니다: {error}
             </div>
           ) : (
             <div className="w-full mt-4">
@@ -52,14 +72,15 @@ export default async function Home() {
                       key={item.id} 
                       className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 flex flex-col gap-1"
                     >
-                      <span className="font-mono text-xs text-blue-500">ID: {item.id}</span>
-                      {/* 테이블의 컬럼명에 따라 item.content 혹은 item.name 등으로 수정하세요 */}
-                      <p className="text-zinc-800 dark:text-zinc-200">
+                      <div className="flex justify-between items-center">
+                        <span className="font-mono text-xs text-blue-500">ID: {item.id}</span>
+                        <span className="text-[10px] text-zinc-400">
+                          {new Date(item.created_at).toLocaleString()}
+                        </span>
+                      </div>
+                      <p className="text-zinc-800 dark:text-zinc-200 mt-1">
                         {item.content || "내용 없음"}
                       </p>
-                      <span className="text-[10px] text-zinc-400">
-                        {new Date(item.created_at).toLocaleString()}
-                      </span>
                     </li>
                   ))
                 ) : (
@@ -73,9 +94,9 @@ export default async function Home() {
         <div className="mt-12 flex flex-col gap-4 text-base font-medium sm:flex-row">
           <button 
             className="flex h-12 items-center justify-center rounded-full bg-black text-white px-8 transition-colors hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-            onClick={() => window.location.reload()} // 간단한 새로고침 버튼 (클라이언트 기능이 필요하면 'use client' 추가 필요)
-          >
-            데이터 새로고침
+            onClick={fetchItems} // 새로고침 시 함수 재호출
+          > 
+            데이터 새로고침 
           </button>
         </div>
       </main>
