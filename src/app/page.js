@@ -1,40 +1,45 @@
 "use client"; // 클라이언트 컴포넌트임을 선언
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
-import { createClient } from '@supabase/supabase-js';
-
-// 1. Supabase 클라이언트 설정
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import Link from "next/link";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function Home() {
-  // 상태 관리 (C#의 필드/프로퍼티 역할)
   const [testItems, setTestItems] = useState([]);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // 2. 데이터 가져오기 함수 (async/await)
-  const fetchItems = async () => {
+  const fetchItems = useCallback(async () => {
+    setError(null);
     setLoading(true);
-    const { data, error } = await supabase
-      .from("test")
-      .select("*")
-      .order("created_at", { ascending: false });
 
-    if (error) {
-      setError(error.message);
-    } else {
-      setTestItems(data);
+    if (!supabase) {
+      setError("Supabase 환경변수가 설정되지 않았습니다.");
+      setTestItems([]);
+      setLoading(false);
+      return;
     }
-    setLoading(false);
-  };
 
-  // 3. 페이지 로드 시 최초 1회 실행 (무한 루프 방지)
+    try {
+      const { data, error } = await supabase
+        .from("test")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setTestItems(data ?? []);
+    } catch (fetchError) {
+      setError(fetchError?.message ?? "알 수 없는 오류가 발생했습니다.");
+      setTestItems([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchItems();
-  }, []); // 의존성 배열을 비워두어 단 한 번만 실행되게 합니다.
+  }, [fetchItems]);
 
   return (
     <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black min-h-screen">
@@ -75,7 +80,7 @@ export default function Home() {
                       <div className="flex justify-between items-center">
                         <span className="font-mono text-xs text-blue-500">ID: {item.id}</span>
                         <span className="text-[10px] text-zinc-400">
-                          {new Date(item.created_at).toLocaleString()}
+                          {item.created_at ? new Date(item.created_at).toLocaleString() : "생성일 없음"}
                         </span>
                       </div>
                       <p className="text-zinc-800 dark:text-zinc-200 mt-1">
@@ -94,10 +99,22 @@ export default function Home() {
         <div className="mt-12 flex flex-col gap-4 text-base font-medium sm:flex-row">
           <button 
             className="flex h-12 items-center justify-center rounded-full bg-black text-white px-8 transition-colors hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-            onClick={fetchItems} // 새로고침 시 함수 재호출
-          > 
-            데이터 새로고침 
+            onClick={fetchItems}
+          >
+            데이터 새로고침
           </button>
+          <Link
+            href="/signup"
+            className="flex h-12 items-center justify-center rounded-full border border-zinc-300 bg-white text-black px-8 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+          >
+            회원가입 페이지 이동
+          </Link>
+          <Link
+            href="/board"
+            className="flex h-12 items-center justify-center rounded-full border border-zinc-300 bg-white text-black px-8 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+          >
+            게시판 보기
+          </Link>
         </div>
       </main>
     </div>
