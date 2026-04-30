@@ -1,122 +1,87 @@
-"use client"; // 클라이언트 컴포넌트임을 선언
+"use client";
 
-import { useState, useEffect, useCallback } from "react";
-import Image from "next/image";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { supabase } from "@/lib/supabaseClient";
 
 export default function Home() {
-  const [testItems, setTestItems] = useState([]);
-  const [error, setError] = useState(null);
+  const [userEmail, setUserEmail] = useState(null);
   const [loading, setLoading] = useState(true);
-
-  const fetchItems = useCallback(async () => {
-    setError(null);
-    setLoading(true);
-
-    if (!supabase) {
-      setError("Supabase 환경변수가 설정되지 않았습니다.");
-      setTestItems([]);
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from("test")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      setTestItems(data ?? []);
-    } catch (fetchError) {
-      setError(fetchError?.message ?? "알 수 없는 오류가 발생했습니다.");
-      setTestItems([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetchItems();
-  }, [fetchItems]);
+    const fetchUser = async () => {
+      try {
+        const response = await fetch('/api/auth/me', { cache: 'no-store' });
+        if (!response.ok) {
+          setUserEmail(null);
+          return;
+        }
+
+        const data = await response.json();
+        setUserEmail(data.email || null);
+      } catch (fetchError) {
+        setError('사용자 정보를 불러오는 중 오류가 발생했습니다.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUser();
+  }, []);
 
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black min-h-screen">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center py-24 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert mb-8"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left w-full">
-          <h1 className="text-3xl font-semibold tracking-tight text-black dark:text-zinc-50">
-            Supabase 데이터베이스 연동 확인
+    <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-6 py-16 dark:bg-black">
+      <div className="w-full max-w-3xl rounded-3xl border border-zinc-200 bg-white p-10 shadow-xl shadow-zinc-200/40 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-black/20">
+        <div className="mb-8 text-center">
+          <h1 className="text-4xl font-semibold text-black dark:text-zinc-50">
+            {userEmail ? `${userEmail}님, 환영합니다!` : '자체 회원가입 & 로그인 예제'}
           </h1>
+          <p className="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
+            {userEmail
+              ? '로그인 상태가 유지되고 있습니다.'
+              : 'Supabase 없이 자체 인증 API를 이용한 흐름을 시작합니다.'}
+          </p>
 
           {loading ? (
-            <p className="text-zinc-500 italic">데이터를 불러오는 중입니다...</p>
-          ) : error ? (
-            <div className="p-4 bg-red-50 text-red-600 rounded-md border border-red-200 w-full">
-              데이터를 불러오지 못했습니다: {error}
-            </div>
-          ) : (
-            <div className="w-full mt-4">
-              <h2 className="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-4">
-                Test 테이블 항목 ({testItems?.length || 0})
-              </h2>
-              
-              <ul className="grid gap-3 w-full">
-                {testItems && testItems.length > 0 ? (
-                  testItems.map((item) => (
-                    <li 
-                      key={item.id} 
-                      className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 flex flex-col gap-1"
-                    >
-                      <div className="flex justify-between items-center">
-                        <span className="font-mono text-xs text-blue-500">ID: {item.id}</span>
-                        <span className="text-[10px] text-zinc-400">
-                          {item.created_at ? new Date(item.created_at).toLocaleString() : "생성일 없음"}
-                        </span>
-                      </div>
-                      <p className="text-zinc-800 dark:text-zinc-200 mt-1">
-                        {item.content || "내용 없음"}
-                      </p>
-                    </li>
-                  ))
-                ) : (
-                  <p className="text-zinc-500 italic">표시할 데이터가 없습니다. DB에 행을 추가해 보세요!</p>
-                )}
-              </ul>
-            </div>
-          )}
+            <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">사용자 정보를 불러오는 중...</p>
+          ) : null}
+          {error ? (
+            <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p>
+          ) : null}
         </div>
 
-        <div className="mt-12 flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <button 
-            className="flex h-12 items-center justify-center rounded-full bg-black text-white px-8 transition-colors hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-            onClick={fetchItems}
-          >
-            데이터 새로고침
-          </button>
+        <div className="grid gap-4 sm:grid-cols-3">
           <Link
             href="/signup"
-            className="flex h-12 items-center justify-center rounded-full border border-zinc-300 bg-white text-black px-8 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+            className="rounded-2xl border border-zinc-200 bg-zinc-50 px-6 py-5 text-center text-black transition hover:border-black hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-white dark:hover:bg-zinc-800"
           >
-            회원가입 페이지 이동
+            회원가입
           </Link>
+
+          <Link
+            href="/login"
+            className="rounded-2xl border border-zinc-200 bg-zinc-50 px-6 py-5 text-center text-black transition hover:border-black hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-white dark:hover:bg-zinc-800"
+          >
+            로그인
+          </Link>
+
           <Link
             href="/board"
-            className="flex h-12 items-center justify-center rounded-full border border-zinc-300 bg-white text-black px-8 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+            className="rounded-2xl border border-zinc-200 bg-zinc-50 px-6 py-5 text-center text-black transition hover:border-black hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-white dark:hover:bg-zinc-800"
           >
-            게시판 보기
+            게시판
           </Link>
         </div>
-      </main>
+
+        <div className="mt-10 rounded-2xl border border-zinc-200 bg-zinc-50 p-6 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
+          <p className="mb-2 font-semibold">현재 구현된 기능</p>
+          <ul className="list-disc pl-5 space-y-2">
+            <li>서버 API 기반 회원가입</li>
+            <li>암호 해시 저장</li>
+            <li>세션 쿠키 기반 로그인</li>
+          </ul>
+        </div>
+      </div>
     </div>
   );
 }
