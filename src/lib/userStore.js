@@ -1,45 +1,70 @@
-import fs from 'fs/promises';
-import path from 'path';
-import { randomUUID } from 'crypto';
-
-const usersFile = path.join(process.cwd(), 'src', 'lib', 'users.json');
-
-async function readUsers() {
-  try {
-    const file = await fs.readFile(usersFile, 'utf8');
-    return JSON.parse(file);
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      return [];
-    }
-    throw error;
-  }
-}
-
-async function writeUsers(users) {
-  await fs.writeFile(usersFile, JSON.stringify(users, null, 2), 'utf8');
-}
+import { supabase } from '@/lib/supabaseClient';
 
 export async function getUserByEmail(email) {
-  const users = await readUsers();
-  return users.find((user) => user.email === email.toLowerCase()) ?? null;
+  if (!supabase) {
+    throw new Error('Supabase client is not configured.');
+  }
+
+  const normalizedEmail = email.toLowerCase();
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, email, password_hash, created_at')
+    .eq('email', normalizedEmail)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  return {
+    id: data.id,
+    email: data.email,
+    passwordHash: data.password_hash,
+    createdAt: data.created_at,
+  };
 }
 
 export async function addUser({ email, passwordHash }) {
+  if (!supabase) {
+    throw new Error('Supabase client is not configured.');
+  }
+
   const normalizedEmail = email.toLowerCase();
-  const users = await readUsers();
-  if (users.some((user) => user.email === normalizedEmail)) {
+  const { data: existingUser, error: fetchError } = await supabase
+    .from('users')
+    .select('id')
+    .eq('email', normalizedEmail)
+    .maybeSingle();
+
+  if (fetchError) {
+    throw fetchError;
+  }
+
+  if (existingUser) {
     throw new Error('이미 존재하는 이메일입니다.');
   }
 
-  const newUser = {
-    id: randomUUID(),
-    email: normalizedEmail,
-    passwordHash,
-    createdAt: new Date().toISOString(),
-  };
+  const { data, error } = await supabase
+    .from('users')
+    .insert([{ email: normalizedEmail, password_hash: passwordHash }])
+    .select()
+    .single();
 
-  users.push(newUser);
-  await writeUsers(users);
-  return newUser;
+  if (error) {
+    if (error.code === '23505') {
+      throw new Error('이미 존재하는 이메일입니다.');
+    }
+    throw error;
+  }
+
+  return {
+    id: data.id,
+    email: data.email,
+    passwordHash: data.password_hash,
+    createdAt: data.created_at,
+  };
 }
