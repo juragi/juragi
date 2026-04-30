@@ -1,12 +1,13 @@
-import { supabase } from '@/lib/supabaseClient';
+//import { supabase } from '@/lib/supabaseClient';
+import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 export async function getUserByEmail(email) {
-  if (!supabase) {
+  if (!supabaseAdmin) {
     throw new Error('Supabase client is not configured.');
   }
 
   const normalizedEmail = email.toLowerCase();
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('users')
     .select('id, email, password_hash, created_at')
     .eq('email', normalizedEmail)
@@ -29,12 +30,12 @@ export async function getUserByEmail(email) {
 }
 
 export async function addUser({ email, passwordHash }) {
-  if (!supabase) {
+  if (!supabaseAdmin) {
     throw new Error('Supabase client is not configured.');
   }
 
   const normalizedEmail = email.toLowerCase();
-  const { data: existingUser, error: fetchError } = await supabase
+  const { data: existingUser, error: fetchError } = await supabaseAdmin
     .from('users')
     .select('id')
     .eq('email', normalizedEmail)
@@ -48,7 +49,7 @@ export async function addUser({ email, passwordHash }) {
     throw new Error('이미 존재하는 이메일입니다.');
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('users')
     .insert([{ email: normalizedEmail, password_hash: passwordHash }])
     .select()
