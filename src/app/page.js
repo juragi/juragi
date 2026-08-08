@@ -34,6 +34,23 @@ export default function Home() {
           </div>
         </Link>
 
+        {/* FX 거래 후보 */}
+        <Link href="/fx">
+          <div className="bg-white p-10 rounded-[3rem] shadow-xl shadow-slate-200/50 border border-slate-100 hover:border-amber-500 hover:-translate-y-2 transition-all group relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
+              <span className="text-8xl">📈</span>
+            </div>
+            <span className="text-4xl mb-6 block">📈</span>
+            <h2 className="text-2xl font-black text-slate-800 group-hover:text-amber-600 transition-colors">FX Optimizer</h2>
+            <p className="text-slate-500 text-sm mt-3 font-medium">
+              USD ⇄ EUR 거래 후보를 <br />한눈에 비교하는 계산기
+            </p>
+            <div className="mt-8 flex items-center text-xs font-black uppercase tracking-widest text-amber-500">
+              Launch Tool →
+            </div>
+          </div>
+        </Link>
+
         {/* 로또 추첨기 */}
         <Link href="/lotto">
           <div className="bg-white p-10 rounded-[3rem] shadow-xl shadow-slate-200/50 border border-slate-100 hover:border-emerald-500 hover:-translate-y-2 transition-all group relative overflow-hidden">

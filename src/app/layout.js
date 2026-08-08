@@ -29,6 +29,9 @@ export default function RootLayout({ children }) {
               <Link href="/currency" className={getLinkStyle('/currency')}>
                 Currency
               </Link>
+              <Link href="/fx" className={getLinkStyle('/fx')}>
+                FX
+              </Link>
               <Link href="/lotto" className={getLinkStyle('/lotto')}>
                 Lotto
               </Link>
