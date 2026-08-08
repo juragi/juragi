@@ -149,7 +149,7 @@ export default function FxPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 px-3 py-4 text-slate-800 sm:px-4 lg:px-6">
+    <div className="bg-slate-50 px-3 py-4 text-slate-800 sm:px-4 lg:px-6">
       <div className="mx-auto flex max-w-6xl flex-col gap-3">
         <header className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
           <p className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-500">FX Optimizer</p>
