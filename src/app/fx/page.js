@@ -82,7 +82,9 @@ function getBuyCandidates(usdkrw, eurkrw, minimumUsd = 10) {
 }
 
 function getUsdOffset(usd, multiple) {
-  let v = 0
+  let v = 6.26
+  if (usd + multiple * 2.62 / 2 > 1350) v = 6.26
+  return v;
   if (usd + multiple * 2.62 / 2 > 1336.5) v = 2.62
   else if (usd + multiple * 2.60 / 2 > 1325.4) v = 2.60
   else if (usd + multiple * 2.58 / 2 > 1316.4) v = 2.58
@@ -129,6 +131,9 @@ export default function FxPage() {
 
   const sellCandidates = useMemo(() => getSellCandidates(values.usdSell, values.eur), [values.usdSell, values.eur])
   const buyCandidates = useMemo(() => getBuyCandidates(values.usdBuy, values.eur), [values.usdBuy, values.eur])
+  
+  const usdMidRate = useMemo(() => (values.usdBuy + values.usdSell) / 2, [values.usdBuy, values.usdSell])
+  const eurUsdRate = useMemo(() => values.eur / usdMidRate, [usdMidRate, values.eur])
 
   const handleChange = (key) => (event) => {
     setValues((prev) => ({ ...prev, [key]: toNumber(event.target.value) }))
@@ -149,16 +154,16 @@ export default function FxPage() {
   }
 
   return (
-    <div className="bg-slate-50 px-3 py-4 text-slate-800 sm:px-4 lg:px-6">
-      <div className="mx-auto flex max-w-6xl flex-col gap-3">
-        <header className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+    <div className="bg-slate-50 px-3 py-2 text-slate-800 sm:px-4 lg:px-6">
+      <div className="mx-auto flex max-w-6xl flex-col gap-2">
+        <header className="rounded-2xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
           <p className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-500">FX Optimizer</p>
-          <h1 className="mt-1 text-xl font-black tracking-tight text-slate-900">USD ⇄ EUR 거래 후보</h1>
-          <p className="mt-1 text-xs text-slate-500">환율 입력만으로 최적의 거래 금액 후보를 바로 확인합니다.</p>
+          <h1 className="mt-0.5 text-lg font-black tracking-tight text-slate-900">USD ⇄ EUR 거래 후보</h1>
+          <p className="mt-0.5 text-[11px] text-slate-500">환율 입력만으로 최적의 거래 금액 후보를 바로 확인합니다.</p>
         </header>
 
-        <section className="grid gap-3">
-          <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+        <section className="grid gap-2">
+          <div className="rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm">
             <div className="grid gap-2 sm:grid-cols-3">
               <label className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">
                 <span className="mb-1 block">USD/KRW (BUY)</span>
@@ -218,45 +223,47 @@ export default function FxPage() {
               </label>
             </div>
           </div>
+          <div className="mt-2 pt-2 border-t border-slate-200 flex justify-end items-center gap-2">
+            <p className="text-[9px] text-slate-500">EUR / USD</p>
+            <p className="text-sm font-black text-indigo-600">{formatRate(eurUsdRate)}</p>
+          </div>
         </section>
 
         <section className="grid gap-1 grid-cols-2 min-w-0">
-          <article className="rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <h2 className="text-[11px] font-black text-slate-800">SELL 후보</h2>
+          <article className="rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+              <h2 className="text-[10px] font-black text-slate-800">BUY 후보</h2>
               <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-slate-400">TOP 3</span>
             </div>
-            <div className="grid gap-1">
-              {sellCandidates.map((item, index) => (
-                <div key={`${item.eur}-${index}`} className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-2 rounded-2xl bg-slate-50 px-2 py-1.5">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-[10px] font-black text-indigo-500 shadow-sm">
+            <div className="grid gap-0.5">
+              {buyCandidates.map((item, index) => (
+                <div key={`${item.usd}-${index}`} className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-1.5 rounded-xl bg-slate-50 px-1.5 py-1">
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-[9px] font-black text-indigo-500 shadow-sm">
                     {index + 1}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-black text-slate-900">{formatNumber(item.eur)} EUR</p>
-                    <p className="text-[10px] text-slate-500">→ {formatNumber(item.usd)} USD</p>
-                    <p className="mt-1 text-[10px] font-black text-emerald-500">{formatRate(item.rate)}</p>
+                    <p className="text-xs font-black text-slate-900">{formatNumber(item.usd)} USD <span className="text-[9px] text-slate-500">→ {formatNumber(item.eur)} EUR</span></p>
+                    <p className="mt-0.5 text-[10px] font-black text-rose-500">{formatRate(item.rate)}</p>
                   </div>
                 </div>
               ))}
             </div>
           </article>
 
-          <article className="rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <h2 className="text-[11px] font-black text-slate-800">BUY 후보</h2>
+          <article className="rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+              <h2 className="text-[10px] font-black text-slate-800">SELL 후보</h2>
               <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-slate-400">TOP 3</span>
             </div>
-            <div className="grid gap-1">
-              {buyCandidates.map((item, index) => (
-                <div key={`${item.usd}-${index}`} className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-2 rounded-2xl bg-slate-50 px-2 py-1.5">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-[10px] font-black text-indigo-500 shadow-sm">
+            <div className="grid gap-0.5">
+              {sellCandidates.map((item, index) => (
+                <div key={`${item.eur}-${index}`} className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-1.5 rounded-xl bg-slate-50 px-1.5 py-1">
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-[9px] font-black text-indigo-500 shadow-sm">
                     {index + 1}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-black text-slate-900">{formatNumber(item.usd)} USD</p>
-                    <p className="text-[10px] text-slate-500">→ {formatNumber(item.eur)} EUR</p>
-                    <p className="mt-1 text-[10px] font-black text-amber-500">{formatRate(item.rate)}</p>
+                    <p className="text-xs font-black text-slate-900">{formatNumber(item.eur)} EUR <span className="text-[9px] text-slate-500">→ {formatNumber(item.usd)} USD</span></p>
+                    <p className="mt-0.5 text-[10px] font-black text-emerald-500">{formatRate(item.rate)}</p>
                   </div>
                 </div>
               ))}
