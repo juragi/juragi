@@ -84,7 +84,7 @@ function getBuyCandidates(usdkrw, eurkrw, minimumUsd = 10) {
 
 function getUsdOffset(usd, multiple) {
   let v = 6.26
-  if (usd + multiple * 2.62 / 2 > 1350) v = 6.26
+  if (usd + multiple * 2.62 / 2 > 1350) v = 5.9
   return v;
   if (usd + multiple * 2.62 / 2 > 1336.5) v = 2.62
   else if (usd + multiple * 2.60 / 2 > 1325.4) v = 2.60
