@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 
 const STORAGE_KEY = 'juragi_fx_values'
@@ -116,6 +116,73 @@ export default function FxPage() {
   const [saveState, setSaveState] = useState('idle')
   const [saveMessage, setSaveMessage] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  const [hasPendingSave, setHasPendingSave] = useState(false)
+  const [isHydrated, setIsHydrated] = useState(false)
+  const [lastSavedAt, setLastSavedAt] = useState('')
+  const valuesRef = useRef(defaultValues)
+
+  const handleSaveToDb = useCallback(async () => {
+    if (!supabase) {
+      setSaveState('error')
+      setSaveMessage('Supabase 클라이언트가 초기화되지 않았습니다.')
+      return
+    }
+
+    setHasPendingSave(false)
+
+    const payload = {
+      saved_at: new Date().toISOString(),
+      storage_key: STORAGE_KEY,
+      values: valuesRef.current,
+    }
+
+    setIsSaving(true)
+    setSaveState('saving')
+    setSaveMessage('저장 중입니다...')
+
+    try {
+      const { data: existingRows, error: selectError } = await supabase
+        .from('fx_snapshots')
+        .select('id')
+        .eq('storage_key', STORAGE_KEY)
+        .order('saved_at', { ascending: false })
+        .limit(1)
+
+      if (selectError) {
+        throw selectError
+      }
+
+      let saveError = null
+
+      if (existingRows?.[0]?.id) {
+        const { error } = await supabase
+          .from('fx_snapshots')
+          .update(payload)
+          .eq('id', existingRows[0].id)
+
+        saveError = error
+      } else {
+        const { error } = await supabase
+          .from('fx_snapshots')
+          .insert(payload)
+
+        saveError = error
+      }
+
+      if (saveError) {
+        throw saveError
+      }
+
+      setSaveState('success')
+      setSaveMessage('자동 저장 완료')
+      setLastSavedAt(new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }))
+    } catch (error) {
+      setSaveState('error')
+      setSaveMessage(`저장 실패: ${error.message}`)
+    } finally {
+      setIsSaving(false)
+    }
+  }, [])
 
   useEffect(() => {
     const loadLatestValues = async () => {
@@ -135,7 +202,8 @@ export default function FxPage() {
         try {
           const { data, error } = await supabase
             .from('fx_snapshots')
-            .select('values')
+            .select('id, values')
+            .eq('storage_key', STORAGE_KEY)
             .order('saved_at', { ascending: false })
             .limit(1)
 
@@ -148,15 +216,40 @@ export default function FxPage() {
       }
 
       setValues(initialValues)
+      valuesRef.current = initialValues
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(initialValues))
+      setIsHydrated(true)
+      setSaveState('ready')
+      setSaveMessage('자동 저장 준비 완료')
     }
 
     void loadLatestValues()
   }, [])
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(values))
+    valuesRef.current = values
   }, [values])
+
+  useEffect(() => {
+    if (!isHydrated) {
+      return
+    }
+
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(values))
+    setHasPendingSave(true)
+  }, [values, isHydrated])
+
+  useEffect(() => {
+    if (!isHydrated || !hasPendingSave || !supabase) {
+      return
+    }
+
+    const timer = window.setTimeout(() => {
+      void handleSaveToDb()
+    }, 1800)
+
+    return () => window.clearTimeout(timer)
+  }, [hasPendingSave, isHydrated, supabase, handleSaveToDb])
 
   const sellCandidates = useMemo(() => getSellCandidates(values.usdSell, values.eur), [values.usdSell, values.eur])
   const buyCandidates = useMemo(() => getBuyCandidates(values.usdBuy, values.eur), [values.usdBuy, values.eur])
@@ -182,72 +275,40 @@ export default function FxPage() {
     }))
   }
 
-  const handleSaveToDb = async () => {
-    if (!supabase) {
-      setSaveState('error')
-      setSaveMessage('Supabase 클라이언트가 초기화되지 않았습니다.')
-      return
-    }
-
-    const storageSnapshot = window.localStorage.getItem(STORAGE_KEY)
-    const payload = {
-      saved_at: new Date().toISOString(),
-      storage_key: STORAGE_KEY,
-      values: storageSnapshot ? JSON.parse(storageSnapshot) : values,
-    }
-
-    setIsSaving(true)
-    setSaveState('saving')
-    setSaveMessage('저장 중입니다...')
-
-    try {
-      const { error } = await supabase
-        .from('fx_snapshots')
-        .insert(payload)
-
-      if (error) {
-        throw error
-      }
-
-      setSaveState('success')
-      setSaveMessage('Supabase에 저장되었습니다.')
-    } catch (error) {
-      setSaveState('error')
-      setSaveMessage(`저장 실패: ${error.message}`)
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
   return (
     <div className="bg-slate-50 px-3 py-2 text-slate-800 sm:px-4 lg:px-6">
-      <div className="mx-auto flex max-w-6xl flex-col gap-2">
-        <header className="rounded-2xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-500">FX Optimizer</p>
-              <h1 className="mt-0.5 text-lg font-black tracking-tight text-slate-900">USD ⇄ EUR 거래 후보</h1>
-              <p className="mt-0.5 text-[11px] text-slate-500">환율 입력만으로 최적의 거래 금액 후보를 바로 확인합니다.</p>
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 sm:px-6 lg:max-w-5xl xl:max-w-6xl">
+        <header className="rounded-[28px] border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-indigo-50 px-4 py-3 shadow-sm">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4">
+            <div className="space-y-1">
+              <p className="text-[10px] font-black uppercase tracking-[0.35em] text-indigo-500">FX Optimizer</p>
+              <h1 className="text-xl font-black tracking-tight text-slate-900 sm:text-2xl">USD ⇄ EUR 거래 후보</h1>
+              <p className="max-w-2xl text-sm leading-6 text-slate-500">입력 값이 자동 저장되어 어디서든 최신 상태로 불러옵니다.</p>
             </div>
-            <button
-              type="button"
-              onClick={handleSaveToDb}
-              disabled={isSaving}
-              className="rounded-2xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-            >
-              {isSaving ? '저장 중...' : '현재 값 DB에 저장'}
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-semibold ${saveState === 'error' ? 'border-rose-200 bg-rose-50 text-rose-600' : saveState === 'saving' ? 'border-amber-200 bg-amber-50 text-amber-700' : saveState === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-600'}`}>
+                <span className={`h-2.5 w-2.5 rounded-full ${saveState === 'error' ? 'bg-rose-500' : saveState === 'saving' ? 'bg-amber-500 animate-pulse' : saveState === 'success' ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                {saveState === 'saving' ? '저장 중' : saveState === 'success' ? '저장 완료' : saveState === 'error' ? '저장 실패' : '자동 저장 준비'}
+              </div>
+              <button
+                type="button"
+                onClick={handleSaveToDb}
+                disabled={isSaving}
+                className="rounded-2xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                {isSaving ? '저장 중...' : '지금 저장'}
+              </button>
+            </div>
           </div>
-          {saveMessage ? (
-            <p className={`mt-2 text-[11px] ${saveState === 'error' ? 'text-rose-600' : saveState === 'success' ? 'text-emerald-600' : 'text-slate-500'}`}>
-              {saveMessage}
-            </p>
-          ) : null}
+          <div className="mt-3 flex flex-col gap-2 rounded-2xl border border-slate-200/70 bg-white/80 px-4 py-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+            <span className="break-words text-sm">{hasPendingSave ? '입력 중... 2초 뒤 자동 저장됩니다.' : saveMessage || '입력하면 자동으로 최신값이 저장됩니다.'}</span>
+            {lastSavedAt ? <span className="font-semibold text-slate-500">최근 저장: {lastSavedAt}</span> : null}
+          </div>
         </header>
 
-        <section className="grid gap-2">
-          <div className="rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm">
-            <div className="grid gap-2 sm:grid-cols-3">
+        <section className="grid gap-3">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="grid gap-4 md:grid-cols-3">
               <label className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">
                 <span className="mb-1 block">USD/KRW (BUY)</span>
                 <div className="relative">
@@ -256,13 +317,13 @@ export default function FxPage() {
                     step="0.01"
                     value={values.usdBuy}
                     onChange={handleChange('usdBuy')}
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 pr-12 text-sm font-semibold text-slate-700 outline-none ring-0"
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 pr-12 text-sm font-semibold text-slate-700 outline-none ring-0 transition focus:border-indigo-400 focus:bg-white"
                   />
                   <button
                     type="button"
                     onClick={handleCalcSell}
                     aria-label="Calculate sell from buy"
-                    className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-sm transition hover:bg-indigo-700"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex h-9 w-9 min-w-[2.25rem] items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-sm transition hover:bg-indigo-700"
                   >
                     <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M7 7l10 10" />
@@ -279,13 +340,13 @@ export default function FxPage() {
                     step="0.01"
                     value={values.usdSell}
                     onChange={handleChange('usdSell')}
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 pr-12 text-sm font-semibold text-slate-700 outline-none ring-0"
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 pr-12 text-sm font-semibold text-slate-700 outline-none ring-0 transition focus:border-indigo-400 focus:bg-white"
                   />
                   <button
                     type="button"
                     onClick={handleCalcBuy}
                     aria-label="Calculate buy from sell"
-                    className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-amber-500 text-slate-950 shadow-sm transition hover:bg-amber-600"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex h-9 w-9 min-w-[2.25rem] items-center justify-center rounded-2xl bg-amber-500 text-slate-950 shadow-sm transition hover:bg-amber-600"
                   >
                     <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M17 17l-10-10" />
@@ -301,7 +362,7 @@ export default function FxPage() {
                   step="0.01"
                   value={values.eur}
                   onChange={handleChange('eur')}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 text-sm font-semibold text-slate-700 outline-none ring-0"
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-700 outline-none ring-0 transition focus:border-indigo-400 focus:bg-white"
                 />
               </label>
             </div>
@@ -312,41 +373,41 @@ export default function FxPage() {
           </div>
         </section>
 
-        <section className="grid gap-1 grid-cols-2 min-w-0">
-          <article className="rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">
-            <div className="mb-1.5 flex items-center justify-between gap-2">
-              <h2 className="text-[10px] font-black text-slate-800">BUY 후보</h2>
-              <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-slate-400">TOP 3</span>
+        <section className="grid grid-cols-2 gap-4 min-w-0">
+          <article className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="text-sm font-black text-slate-800">BUY 후보</h2>
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">TOP 3</span>
             </div>
-            <div className="grid gap-0.5">
+            <div className="grid gap-1">
               {buyCandidates.map((item, index) => (
-                <div key={`${item.usd}-${index}`} className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-1.5 rounded-xl bg-slate-50 px-1.5 py-1">
-                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-[9px] font-black text-indigo-500 shadow-sm">
+                <div key={`${item.usd}-${index}`} className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-1.5 rounded-xl bg-slate-50 px-2 py-2">
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-[10px] font-black text-indigo-500 shadow-sm">
                     {index + 1}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs font-black text-slate-900">{formatNumber(item.usd)} USD <span className="text-[9px] text-slate-500">→ {formatNumber(item.eur)} EUR</span></p>
-                    <p className="mt-0.5 text-[10px] font-black text-rose-500">{formatRate(item.rate)}</p>
+                    <p className="text-sm font-black text-slate-900">{formatNumber(item.usd)} USD <span className="text-[10px] text-slate-500">→ {formatNumber(item.eur)} EUR</span></p>
+                    <p className="mt-0.5 text-sm font-black text-rose-500">{formatRate(item.rate)}</p>
                   </div>
                 </div>
               ))}
             </div>
           </article>
 
-          <article className="rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">
-            <div className="mb-1.5 flex items-center justify-between gap-2">
-              <h2 className="text-[10px] font-black text-slate-800">SELL 후보</h2>
-              <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-slate-400">TOP 3</span>
+          <article className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="text-sm font-black text-slate-800">SELL 후보</h2>
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">TOP 3</span>
             </div>
-            <div className="grid gap-0.5">
+            <div className="grid gap-1">
               {sellCandidates.map((item, index) => (
-                <div key={`${item.eur}-${index}`} className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-1.5 rounded-xl bg-slate-50 px-1.5 py-1">
-                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-[9px] font-black text-indigo-500 shadow-sm">
+                <div key={`${item.eur}-${index}`} className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-1.5 rounded-xl bg-slate-50 px-2 py-2">
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-[10px] font-black text-indigo-500 shadow-sm">
                     {index + 1}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs font-black text-slate-900">{formatNumber(item.eur)} EUR <span className="text-[9px] text-slate-500">→ {formatNumber(item.usd)} USD</span></p>
-                    <p className="mt-0.5 text-[10px] font-black text-emerald-500">{formatRate(item.rate)}</p>
+                    <p className="text-sm font-black text-slate-900">{formatNumber(item.eur)} EUR <span className="text-[10px] text-slate-500">→ {formatNumber(item.usd)} USD</span></p>
+                    <p className="mt-0.5 text-sm font-black text-emerald-500">{formatRate(item.rate)}</p>
                   </div>
                 </div>
               ))}
