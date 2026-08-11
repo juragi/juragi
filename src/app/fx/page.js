@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { supabase } from '@/lib/supabaseClient'
 
 const STORAGE_KEY = 'juragi_fx_values'
 const defaultValues = {
@@ -112,17 +113,45 @@ function formatRate(value) {
 
 export default function FxPage() {
   const [values, setValues] = useState(defaultValues)
+  const [saveState, setSaveState] = useState('idle')
+  const [saveMessage, setSaveMessage] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(STORAGE_KEY)
-    if (stored) {
+    const loadLatestValues = async () => {
+      let initialValues = defaultValues
+
       try {
-        const parsed = JSON.parse(stored)
-        setValues((prev) => ({ ...prev, ...parsed }))
+        const stored = window.localStorage.getItem(STORAGE_KEY)
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          initialValues = { ...initialValues, ...parsed }
+        }
       } catch (error) {
         console.error('Failed to parse saved FX inputs.', error)
       }
+
+      if (supabase) {
+        try {
+          const { data, error } = await supabase
+            .from('fx_snapshots')
+            .select('values')
+            .order('saved_at', { ascending: false })
+            .limit(1)
+
+          if (!error && data?.[0]?.values) {
+            initialValues = { ...initialValues, ...data[0].values }
+          }
+        } catch (error) {
+          console.error('Failed to load latest FX snapshot from Supabase.', error)
+        }
+      }
+
+      setValues(initialValues)
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(initialValues))
     }
+
+    void loadLatestValues()
   }, [])
 
   useEffect(() => {
@@ -153,13 +182,67 @@ export default function FxPage() {
     }))
   }
 
+  const handleSaveToDb = async () => {
+    if (!supabase) {
+      setSaveState('error')
+      setSaveMessage('Supabase 클라이언트가 초기화되지 않았습니다.')
+      return
+    }
+
+    const storageSnapshot = window.localStorage.getItem(STORAGE_KEY)
+    const payload = {
+      saved_at: new Date().toISOString(),
+      storage_key: STORAGE_KEY,
+      values: storageSnapshot ? JSON.parse(storageSnapshot) : values,
+    }
+
+    setIsSaving(true)
+    setSaveState('saving')
+    setSaveMessage('저장 중입니다...')
+
+    try {
+      const { error } = await supabase
+        .from('fx_snapshots')
+        .insert(payload)
+
+      if (error) {
+        throw error
+      }
+
+      setSaveState('success')
+      setSaveMessage('Supabase에 저장되었습니다.')
+    } catch (error) {
+      setSaveState('error')
+      setSaveMessage(`저장 실패: ${error.message}`)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   return (
     <div className="bg-slate-50 px-3 py-2 text-slate-800 sm:px-4 lg:px-6">
       <div className="mx-auto flex max-w-6xl flex-col gap-2">
         <header className="rounded-2xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
-          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-500">FX Optimizer</p>
-          <h1 className="mt-0.5 text-lg font-black tracking-tight text-slate-900">USD ⇄ EUR 거래 후보</h1>
-          <p className="mt-0.5 text-[11px] text-slate-500">환율 입력만으로 최적의 거래 금액 후보를 바로 확인합니다.</p>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-500">FX Optimizer</p>
+              <h1 className="mt-0.5 text-lg font-black tracking-tight text-slate-900">USD ⇄ EUR 거래 후보</h1>
+              <p className="mt-0.5 text-[11px] text-slate-500">환율 입력만으로 최적의 거래 금액 후보를 바로 확인합니다.</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleSaveToDb}
+              disabled={isSaving}
+              className="rounded-2xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              {isSaving ? '저장 중...' : '현재 값 DB에 저장'}
+            </button>
+          </div>
+          {saveMessage ? (
+            <p className={`mt-2 text-[11px] ${saveState === 'error' ? 'text-rose-600' : saveState === 'success' ? 'text-emerald-600' : 'text-slate-500'}`}>
+              {saveMessage}
+            </p>
+          ) : null}
         </header>
 
         <section className="grid gap-2">

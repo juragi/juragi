@@ -3,7 +3,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 export async function getUserByEmail(email) {
   if (!supabaseAdmin) {
-    throw new Error('Supabase client is not configured.');
+    return null;
   }
 
   const normalizedEmail = email.toLowerCase();
