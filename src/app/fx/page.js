@@ -333,10 +333,10 @@ export default function FxPage() {
 
         <section className="grid gap-3">
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="grid gap-4 md:grid-cols-3">
-              <label className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">
-                <span className="mb-1 block">USD/KRW (BUY)</span>
-                <div className="relative">
+            <div className="grid gap-4">
+              <label className="flex items-center justify-between gap-4 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                <span className="w-36 shrink-0">USD/KRW (BUY)</span>
+                <div className="relative w-full">
                   <input
                     type="number"
                     step="0.01"
@@ -357,9 +357,9 @@ export default function FxPage() {
                   </button>
                 </div>
               </label>
-              <label className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">
-                <span className="mb-1 block">USD/KRW (SELL)</span>
-                <div className="relative">
+              <label className="flex items-center justify-between gap-4 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                <span className="w-36 shrink-0">USD/KRW (SELL)</span>
+                <div className="relative w-full">
                   <input
                     type="number"
                     step="0.01"
@@ -380,8 +380,8 @@ export default function FxPage() {
                   </button>
                 </div>
               </label>
-              <label className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">
-                <span className="mb-1 block">EUR/KRW</span>
+              <label className="flex items-center justify-between gap-4 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                <span className="w-36 shrink-0">EUR/KRW</span>
                 <input
                   type="number"
                   step="0.01"
@@ -401,8 +401,8 @@ export default function FxPage() {
         <section className="grid grid-cols-2 gap-4 min-w-0">
           <article className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
             <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="text-sm font-black text-slate-800">BUY 후보</h2>
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">TOP 3</span>
+              <h2 className="text-sm font-black text-slate-800">BUY </h2>
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">(USD → EUR)</span>
             </div>
             <div className="grid gap-1">
               {buyCandidates.map((item, index) => (
@@ -411,7 +411,7 @@ export default function FxPage() {
                     {index + 1}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-black text-slate-900">{formatNumber(item.usd)} USD <span className="text-[10px] text-slate-500">→ {formatNumber(item.eur)} EUR</span></p>
+                    <p className="text-sm font-black text-slate-900">{formatNumber(item.usd)} <span className="text-[10px] text-slate-500">→ {formatNumber(item.eur)}</span></p>
                     <p className="mt-0.5 text-sm font-black text-rose-500">{formatRate(item.rate)}</p>
                   </div>
                 </div>
@@ -421,8 +421,8 @@ export default function FxPage() {
 
           <article className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
             <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="text-sm font-black text-slate-800">SELL 후보</h2>
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">TOP 3</span>
+              <h2 className="text-sm font-black text-slate-800">SELL</h2>
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">(EUR → USD)</span>
             </div>
             <div className="grid gap-1">
               {sellCandidates.map((item, index) => (
@@ -431,7 +431,7 @@ export default function FxPage() {
                     {index + 1}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-black text-slate-900">{formatNumber(item.eur)} EUR <span className="text-[10px] text-slate-500">→ {formatNumber(item.usd)} USD</span></p>
+                    <p className="text-sm font-black text-slate-900">{formatNumber(item.eur)} <span className="text-[10px] text-slate-500">→ {formatNumber(item.usd)}</span></p>
                     <p className="mt-0.5 text-sm font-black text-emerald-500">{formatRate(item.rate)}</p>
                   </div>
                 </div>
