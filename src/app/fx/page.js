@@ -116,10 +116,13 @@ export default function FxPage() {
   const [saveState, setSaveState] = useState('idle')
   const [saveMessage, setSaveMessage] = useState('')
   const [isSaving, setIsSaving] = useState(false)
-  const [hasPendingSave, setHasPendingSave] = useState(false)
   const [isHydrated, setIsHydrated] = useState(false)
-  const [lastSavedAt, setLastSavedAt] = useState('')
+  const [showSaveToast, setShowSaveToast] = useState(false)
   const valuesRef = useRef(defaultValues)
+  const saveToastTimerRef = useRef(null)
+  const saveDebounceTimerRef = useRef(null)
+  const isSavingRef = useRef(false)
+  const hasHydratedOnceRef = useRef(false)
 
   const handleSaveToDb = useCallback(async () => {
     if (!supabase) {
@@ -128,7 +131,11 @@ export default function FxPage() {
       return
     }
 
-    setHasPendingSave(false)
+    if (isSavingRef.current) {
+      return
+    }
+
+    isSavingRef.current = true
 
     const payload = {
       saved_at: new Date().toISOString(),
@@ -175,11 +182,11 @@ export default function FxPage() {
 
       setSaveState('success')
       setSaveMessage('자동 저장 완료')
-      setLastSavedAt(new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }))
     } catch (error) {
       setSaveState('error')
       setSaveMessage(`저장 실패: ${error.message}`)
     } finally {
+      isSavingRef.current = false
       setIsSaving(false)
     }
   }, [])
@@ -220,7 +227,6 @@ export default function FxPage() {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(initialValues))
       setIsHydrated(true)
       setSaveState('ready')
-      setSaveMessage('자동 저장 준비 완료')
     }
 
     void loadLatestValues()
@@ -231,25 +237,54 @@ export default function FxPage() {
   }, [values])
 
   useEffect(() => {
+    if (!saveMessage) {
+      setShowSaveToast(false)
+      return
+    }
+
+    setShowSaveToast(true)
+
+    if (saveToastTimerRef.current) {
+      window.clearTimeout(saveToastTimerRef.current)
+    }
+
+    saveToastTimerRef.current = window.setTimeout(() => {
+      setShowSaveToast(false)
+    }, 2200)
+
+    return () => {
+      if (saveToastTimerRef.current) {
+        window.clearTimeout(saveToastTimerRef.current)
+      }
+    }
+  }, [saveMessage])
+
+  useEffect(() => {
     if (!isHydrated) {
       return
     }
 
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(values))
-    setHasPendingSave(true)
-  }, [values, isHydrated])
 
-  useEffect(() => {
-    if (!isHydrated || !hasPendingSave || !supabase) {
+    if (!hasHydratedOnceRef.current) {
+      hasHydratedOnceRef.current = true
       return
     }
 
-    const timer = window.setTimeout(() => {
-      void handleSaveToDb()
-    }, 1800)
+    if (saveDebounceTimerRef.current) {
+      window.clearTimeout(saveDebounceTimerRef.current)
+    }
 
-    return () => window.clearTimeout(timer)
-  }, [hasPendingSave, isHydrated, supabase, handleSaveToDb])
+    saveDebounceTimerRef.current = window.setTimeout(() => {
+      void handleSaveToDb()
+    }, 1400)
+
+    return () => {
+      if (saveDebounceTimerRef.current) {
+        window.clearTimeout(saveDebounceTimerRef.current)
+      }
+    }
+  }, [values, isHydrated, handleSaveToDb])
 
   const sellCandidates = useMemo(() => getSellCandidates(values.usdSell, values.eur), [values.usdSell, values.eur])
   const buyCandidates = useMemo(() => getBuyCandidates(values.usdBuy, values.eur), [values.usdBuy, values.eur])
@@ -277,6 +312,13 @@ export default function FxPage() {
 
   return (
     <div className="bg-slate-50 px-3 py-2 text-slate-800 sm:px-4 lg:px-6">
+      {showSaveToast && saveMessage ? (
+        <div className={`fixed right-4 top-20 z-50 flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm font-semibold shadow-lg backdrop-blur ${saveState === 'error' ? 'border-rose-200 bg-rose-50 text-rose-700' : saveState === 'saving' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
+          <span className={`h-2.5 w-2.5 rounded-full ${saveState === 'error' ? 'bg-rose-500' : saveState === 'saving' ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} />
+          {saveMessage}
+        </div>
+      ) : null}
+
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 sm:px-6 lg:max-w-5xl xl:max-w-6xl">
         <header className="rounded-[28px] border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-indigo-50 px-4 py-3 shadow-sm">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4">
@@ -285,24 +327,7 @@ export default function FxPage() {
               <h1 className="text-xl font-black tracking-tight text-slate-900 sm:text-2xl">USD ⇄ EUR 거래 후보</h1>
               <p className="max-w-2xl text-sm leading-6 text-slate-500">입력 값이 자동 저장되어 어디서든 최신 상태로 불러옵니다.</p>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-semibold ${saveState === 'error' ? 'border-rose-200 bg-rose-50 text-rose-600' : saveState === 'saving' ? 'border-amber-200 bg-amber-50 text-amber-700' : saveState === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-600'}`}>
-                <span className={`h-2.5 w-2.5 rounded-full ${saveState === 'error' ? 'bg-rose-500' : saveState === 'saving' ? 'bg-amber-500 animate-pulse' : saveState === 'success' ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-                {saveState === 'saving' ? '저장 중' : saveState === 'success' ? '저장 완료' : saveState === 'error' ? '저장 실패' : '자동 저장 준비'}
-              </div>
-              <button
-                type="button"
-                onClick={handleSaveToDb}
-                disabled={isSaving}
-                className="rounded-2xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-              >
-                {isSaving ? '저장 중...' : '지금 저장'}
-              </button>
-            </div>
-          </div>
-          <div className="mt-3 flex flex-col gap-2 rounded-2xl border border-slate-200/70 bg-white/80 px-4 py-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
-            <span className="break-words text-sm">{hasPendingSave ? '입력 중... 2초 뒤 자동 저장됩니다.' : saveMessage || '입력하면 자동으로 최신값이 저장됩니다.'}</span>
-            {lastSavedAt ? <span className="font-semibold text-slate-500">최근 저장: {lastSavedAt}</span> : null}
+            <div className="flex flex-wrap items-center gap-2" />
           </div>
         </header>
 
