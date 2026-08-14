@@ -293,7 +293,12 @@ export default function FxPage() {
   const eurUsdRate = useMemo(() => values.eur / usdMidRate, [usdMidRate, values.eur])
 
   const handleChange = (key) => (event) => {
-    setValues((prev) => ({ ...prev, [key]: toNumber(event.target.value) }))
+    const value = event.target.value
+    
+    // 소수점 2자리까지만 허용
+    if (value === '' || /^\d*\.?\d{0,2}$/.test(value)) {
+      setValues((prev) => ({ ...prev, [key]: toNumber(value) }))
+    }
   }
 
   const handleCalcSell = () => {
